@@ -24,7 +24,7 @@ function postingCred(name) {
 
 export const config = {
   twitterApiKey: required('TWITTERAPI_KEY'),
-  anthropicApiKey: required('ANTHROPIC_API_KEY'),
+  openaiApiKey: required('OPENAI_API_KEY'),
 
   supabaseUrl: required('SUPABASE_URL'),
   supabaseServiceKey: required('SUPABASE_SERVICE_KEY'),
@@ -47,7 +47,7 @@ export const config = {
 
   pollIntervalMs: parseInt(optional('POLL_INTERVAL_MS', '30000'), 10),
   maxTweetAgeSeconds: parseInt(optional('MAX_TWEET_AGE_SECONDS', '300'), 10),
-  rewriteModel: optional('REWRITE_MODEL', 'claude-sonnet-5'),
+  rewriteModel: optional('REWRITE_MODEL', 'gpt-4o'),
   dryRun: DRY_RUN,
 };
 

@@ -1,4 +1,4 @@
-import { structured } from './anthropic.js';
+import { structured } from './llm.js';
 import { YE_HANDLE } from './config.js';
 
 const NEWS_PREFIXES = [

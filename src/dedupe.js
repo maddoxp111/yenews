@@ -1,4 +1,4 @@
-import { structured } from './anthropic.js';
+import { structured } from './llm.js';
 import { getRecentStories } from './db.js';
 
 const DEDUP_SCHEMA = {

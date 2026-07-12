@@ -7,7 +7,7 @@ of a new post, it:
 1. Reads the new tweet.
 2. Checks it hasn't already broken this news/commentary (dedup).
 3. Grabs the photo/video link if the tweet has media.
-4. Rewrites it with **Claude Sonnet 5** in a natural fan-news-page voice.
+4. Rewrites it with **OpenAI GPT** in a natural fan-news-page voice.
 5. Posts it, starting news with `NEW:`, `BREAKING:`, `REPORT:`, `LEAKED:`, etc.
 6. Quote-tweets any post by **Ye himself** (@kanyewest) with a comment instead.
 
@@ -27,7 +27,7 @@ REPORT: Ye has spent all week in a Tokyo studio with a full band, and a new albu
 - **Posting** also goes through twitterapi.io, which logs into your account with
   a real session, so your posts look like normal user activity. **No X developer
   account or "Automated" label.**
-- **Rewriting** uses the Anthropic API (Claude Sonnet 5).
+- **Rewriting** uses the OpenAI API (GPT, default `gpt-4o`).
 - **State** (seen tweets, posted stories, login session) lives in **Supabase**
   (Postgres).
 - Designed to run 24/7 on **Railway** (or any always-on Node host).
@@ -64,9 +64,10 @@ Default (editable via `WATCH_ACCOUNTS`):
    secret in base32). Accounts without 2FA often get a login cookie that's
    flagged and can't post.
 
-### 2. Anthropic (rewriting)
-1. Sign up at https://console.anthropic.com.
-2. Create an API key → `ANTHROPIC_API_KEY`.
+### 2. OpenAI (rewriting)
+1. Sign up at https://platform.openai.com.
+2. Add a little credit (Billing), then create an API key at
+   https://platform.openai.com/api-keys → `OPENAI_API_KEY`.
 
 ### 3. Supabase (state)
 The tables are already created in this project's Supabase database
@@ -114,13 +115,13 @@ All optional, via env vars (see `.env.example`):
 - `POLL_INTERVAL_MS` — how often to check (default 30000 = 30s).
 - `MAX_TWEET_AGE_SECONDS` — on first start, ignore tweets older than this so a
   fresh deploy doesn't post a backlog (default 300).
-- `REWRITE_MODEL` — defaults to `claude-sonnet-5`.
+- `REWRITE_MODEL` — OpenAI model, defaults to `gpt-4o` (`gpt-4o-mini` is cheaper).
 
 ## Costs (rough)
 
 - twitterapi.io: ~$10–15/mo at 30s polling, plus a fraction of a cent per post.
 - Railway: ~$5/mo.
-- Anthropic: a few dollars/mo at typical volume.
+- OpenAI: a few dollars/mo at typical volume.
 - Supabase: free tier.
 
 ## Tests
@@ -138,10 +139,10 @@ src/
   index.js     main loop (poll → dedup → rewrite → compose → post)
   config.js    env parsing/validation
   poller.js    twitterapi.io advanced-search reads
-  dedupe.js    tweet-ID + Sonnet "same story?" checks
-  rewrite.js   Sonnet rewrite / Ye quote-tweet comment
+  dedupe.js    tweet-ID + GPT "same story?" checks
+  rewrite.js   GPT rewrite / Ye quote-tweet comment
   compose.js   assembles the final post, enforces <= 278 chars
   poster.js    twitterapi.io login session + create/quote tweet
-  anthropic.js shared Anthropic client + structured-output helper
+  llm.js       shared OpenAI client + structured-output helper
   db.js        Supabase state (seen tweets, posted stories, session)
 ```
