@@ -2,6 +2,11 @@ import { config } from './config.js';
 
 const BASE = 'https://api.twitterapi.io';
 
+// twitterapi.io's free tier caps requests at 1 every 5 seconds. Space out
+// paginated requests so we never trip the QPS limit.
+const PAGE_DELAY_MS = 5500;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // Build one advanced-search query covering every watched account:
 //   from:a OR from:b OR ... since_time:<unix>
 // twitterapi.io's advanced search mirrors X's search operators.
@@ -67,8 +72,10 @@ export async function fetchNewTweets(sinceUnix) {
   let cursor = '';
 
   // One page (20 tweets) is almost always enough at a 30s cadence, but page a
-  // couple of times in case several accounts posted at once.
+  // couple of times in case several accounts posted at once. Space out pages
+  // to respect the free-tier 1-request-per-5-seconds limit.
   for (let page = 0; page < 3; page++) {
+    if (page > 0) await sleep(PAGE_DELAY_MS);
     const data = await twitterApiGet('/twitter/tweet/advanced_search', {
       query,
       queryType: 'Latest',
