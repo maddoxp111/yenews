@@ -23,26 +23,24 @@ REPORT: Ye has spent all week in a Tokyo studio with a full band, and a new albu
 ## How it works
 
 - **Reads** come from [twitterapi.io](https://twitterapi.io) — a cheap
-  third-party API that can search tweets (the official free X API cannot).
-- **Posting** also goes through twitterapi.io, which logs into your account with
-  a real session, so your posts look like normal user activity. **No X developer
-  account or "Automated" label.**
+  third-party API that can search tweets (the official free X API can't read
+  broadly).
+- **Posting** uses the **official X API v2** (OAuth 1.0a user context). Posts
+  appear as normal posts from your account — the "Automated" label is opt-in
+  and off by default. No proxy, no password sharing.
 - **Rewriting** uses the OpenAI API (GPT, default `gpt-4o`).
-- **State** (seen tweets, posted stories, login session) lives in **Supabase**
+- **State** (seen tweets, posted stories, poll cursor) lives in **Supabase**
   (Postgres).
 - Designed to run 24/7 on **Railway** (or any always-on Node host).
 
 ### ⚠️ Please read this before going live
 
-Using twitterapi.io to post means:
-- You share your X login (username, email, password, and ideally your 2FA/TOTP
-  secret) with twitterapi.io.
-- Automating posting is against X's Terms of Service, so there is a real risk of
-  your account being limited or suspended. This is an account-level risk you're
-  choosing to accept.
-
-Use a dedicated account you're comfortable risking, and keep `DRY_RUN=true` until
-you've watched the logs and are happy with the output.
+- The X API **free tier caps posting at ~17/day (500/month)**. Fine for normal
+  Ye-news volume; on album-drop days you may hit the daily cap. Upgrade to X API
+  Basic if you need more.
+- Running an automated posting account can still run afoul of X's automation
+  rules — use an account you're comfortable running this way, and keep
+  `DRY_RUN=true` until you've watched the logs and are happy with the output.
 
 ## Watched accounts
 
@@ -53,16 +51,24 @@ Default (editable via `WATCH_ACCOUNTS`):
 
 ## Setup
 
-### 1. twitterapi.io (reads + posting)
+### 1. twitterapi.io (reading the watched accounts)
 1. Sign up at https://twitterapi.io and grab your **API key** →
-   `TWITTERAPI_KEY`.
-2. You'll also need a **residential proxy** for login/posting (twitterapi.io
-   requires one). Format: `http://user:pass@ip:port` → `POST_PROXY`. Any
-   residential proxy provider works.
-3. Fill in your posting account's `POST_USERNAME`, `POST_EMAIL`,
-   `POST_PASSWORD`, and — strongly recommended — `POST_TOTP_SECRET` (your 2FA
-   secret in base32). Accounts without 2FA often get a login cookie that's
-   flagged and can't post.
+   `TWITTERAPI_KEY`. Add a few dollars of credit.
+
+### 1b. Official X API (posting)
+On the account you want to post from:
+1. Go to https://developer.x.com → sign up for a free developer account.
+2. Create a **Project** and an **App** inside it.
+3. In the App's **Settings → User authentication settings**, set **App
+   permissions** to **Read and write**, App type **Web/Automated** (any), and
+   save. (This must be done *before* generating tokens.)
+4. In **Keys and tokens**, generate/copy all four:
+   - **API Key** → `X_API_KEY`
+   - **API Key Secret** → `X_API_SECRET`
+   - **Access Token** → `X_ACCESS_TOKEN`
+   - **Access Token Secret** → `X_ACCESS_SECRET`
+   The Access Token/Secret must be generated **after** setting Read+Write, or
+   posting returns a 403. If you flipped permissions later, regenerate them.
 
 ### 2. OpenAI (rewriting)
 1. Sign up at https://platform.openai.com.
@@ -119,7 +125,8 @@ All optional, via env vars (see `.env.example`):
 
 ## Costs (rough)
 
-- twitterapi.io: ~$10–15/mo at 30s polling, plus a fraction of a cent per post.
+- twitterapi.io (reads): ~$10–15/mo at 30s polling.
+- X API (posting): free tier ($0), ~17 posts/day cap.
 - Railway: ~$5/mo.
 - OpenAI: a few dollars/mo at typical volume.
 - Supabase: free tier.
@@ -142,7 +149,7 @@ src/
   dedupe.js    tweet-ID + GPT "same story?" checks
   rewrite.js   GPT rewrite / Ye quote-tweet comment
   compose.js   assembles the final post, enforces <= 278 chars
-  poster.js    twitterapi.io login session + create/quote tweet
+  poster.js    official X API v2 post + quote tweet (twitter-api-v2)
   llm.js       shared OpenAI client + structured-output helper
   db.js        Supabase state (seen tweets, posted stories, session)
 ```

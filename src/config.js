@@ -17,7 +17,7 @@ const DRY_RUN = optional('DRY_RUN', 'true').toLowerCase() === 'true';
 
 // Posting credentials are only strictly required when we're actually posting.
 // In DRY_RUN mode the bot still runs the full read → rewrite → compose pipeline
-// so you can eyeball the output before handing over your account credentials.
+// so you can eyeball the output before adding your X API keys.
 function postingCred(name) {
   return DRY_RUN ? optional(name, '') : required(name);
 }
@@ -29,12 +29,12 @@ export const config = {
   supabaseUrl: required('SUPABASE_URL'),
   supabaseServiceKey: required('SUPABASE_SERVICE_KEY'),
 
-  post: {
-    username: postingCred('POST_USERNAME'),
-    email: postingCred('POST_EMAIL'),
-    password: postingCred('POST_PASSWORD'),
-    totpSecret: optional('POST_TOTP_SECRET', ''),
-    proxy: postingCred('POST_PROXY'),
+  // Official X API v2 posting — OAuth 1.0a user-context credentials.
+  x: {
+    apiKey: postingCred('X_API_KEY'),
+    apiSecret: postingCred('X_API_SECRET'),
+    accessToken: postingCred('X_ACCESS_TOKEN'),
+    accessSecret: postingCred('X_ACCESS_SECRET'),
   },
 
   watchAccounts: optional(
