@@ -1,16 +1,34 @@
 import 'dotenv/config';
 
+// Keys/secrets must be plain ASCII — they go into HTTP headers, which reject
+// any character > 255 (a common paste artifact is a "smart" quote or a bullet
+// "•" sneaking into a value). Catch it here with a clear message naming the
+// variable and position, instead of a cryptic per-request ByteString crash.
+function assertAscii(name, value) {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code > 127) {
+      throw new Error(
+        `Environment variable ${name} contains a non-ASCII character ` +
+          `(code ${code}, "${value[i]}") at position ${i}. This is almost ` +
+          `certainly a copy-paste artifact — delete and re-type/paste the value.`,
+      );
+    }
+  }
+  return value;
+}
+
 function required(name) {
   const value = process.env[name];
   if (!value || value.trim() === '') {
     throw new Error(`Missing required environment variable: ${name}`);
   }
-  return value.trim();
+  return assertAscii(name, value.trim());
 }
 
 function optional(name, fallback) {
   const value = process.env[name];
-  return value && value.trim() !== '' ? value.trim() : fallback;
+  return value && value.trim() !== '' ? assertAscii(name, value.trim()) : fallback;
 }
 
 const DRY_RUN = optional('DRY_RUN', 'true').toLowerCase() === 'true';
