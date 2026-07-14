@@ -15,11 +15,13 @@ function buildQuery(sinceUnix) {
   return `(${froms}) since_time:${sinceUnix}`;
 }
 
-// Pull a media link out of a tweet if it has a photo/video. Appending another
-// tweet's pic.twitter.com / t.co media link to your own post makes X render the
-// media inline — the classic fan-page trick. We prefer the tweet's own short
-// media URL, falling back to the tweet URL itself.
-function extractMediaLink(tweet) {
+// Pull media out of a tweet if it has a photo/video. We return two things:
+//  - link: the short t.co / pic.twitter.com URL to append to our own post so X
+//    renders the media inline (the classic fan-page trick).
+//  - imageUrl: the direct pbs.twimg.com image URL, which we hand to GPT-4o
+//    vision so it can actually READ the screenshot/photo (for videos this is
+//    the thumbnail/poster frame). This is where the real story often lives.
+function extractMedia(tweet) {
   const media =
     tweet.extendedEntities?.media ||
     tweet.entities?.media ||
@@ -27,10 +29,28 @@ function extractMediaLink(tweet) {
     [];
   if (Array.isArray(media) && media.length > 0) {
     const first = media[0];
-    const link = first.url || first.expanded_url || first.media_url_https;
-    if (link) return { link, type: first.type || 'photo' };
+    const link = first.url || first.expanded_url || first.media_url_https || null;
+    if (link) {
+      return {
+        link,
+        imageUrl: first.media_url_https || null,
+        type: first.type || 'photo',
+      };
+    }
   }
   return null;
+}
+
+// If a tweet quotes another tweet, its text + author is context the caption
+// alone doesn't carry. twitterapi.io nests it in the same response — no extra
+// call needed.
+function extractQuoted(tweet) {
+  const q = tweet.quoted_tweet;
+  if (!q) return null;
+  return {
+    text: q.text || '',
+    author: q.author?.userName || q.author?.screen_name || '',
+  };
 }
 
 function normalize(tweet) {
@@ -44,7 +64,8 @@ function normalize(tweet) {
     isReply: Boolean(tweet.isReply || tweet.inReplyToId),
     isRetweet: Boolean(tweet.retweeted_tweet),
     isQuote: Boolean(tweet.quoted_tweet),
-    media: extractMediaLink(tweet),
+    media: extractMedia(tweet),
+    quoted: extractQuoted(tweet),
   };
 }
 

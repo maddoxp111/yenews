@@ -56,6 +56,14 @@ async function handleTweet(tweet) {
   }
 
   const rewritten = await rewriteNews(tweet);
+
+  // Skip posts the model couldn't make sense of, even with the image + quoted
+  // tweet — better to stay quiet than post something vague.
+  if (rewritten.skip) {
+    log(`Skipping (no clear story) @${tweet.author}: ${rewritten.skip_reason || ''}`.trim(), tweet.url);
+    return;
+  }
+
   const { text, withinLimit } = composeNews({
     prefix: rewritten.prefix,
     body: rewritten.body,
