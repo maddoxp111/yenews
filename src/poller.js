@@ -2,10 +2,24 @@ import { config } from './config.js';
 
 const BASE = 'https://api.twitterapi.io';
 
-// twitterapi.io's free tier caps requests at 1 every 5 seconds. Space out
-// paginated requests so we never trip the QPS limit.
-const PAGE_DELAY_MS = 5500;
+// twitterapi.io's free tier caps requests at 1 every 5 seconds. A single global
+// throttle serializes EVERY twitterapi.io call (poll pages + per-account history
+// lookups) with a minimum gap, so we never trip the QPS limit no matter what.
+const MIN_GAP_MS = 5500;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let gate = Promise.resolve();
+let lastCallAt = 0;
+async function throttle() {
+  const prev = gate;
+  let release;
+  gate = new Promise((r) => (release = r));
+  await prev;
+  const wait = Math.max(0, MIN_GAP_MS - (Date.now() - lastCallAt));
+  if (wait) await sleep(wait);
+  lastCallAt = Date.now();
+  return release;
+}
 
 // Build one advanced-search query covering every watched account:
 //   from:a OR from:b OR ... since_time:<unix>
@@ -74,14 +88,43 @@ async function twitterApiGet(path, params) {
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null) url.searchParams.set(k, v);
   }
-  const res = await fetch(url, {
-    headers: { 'X-API-Key': config.twitterApiKey },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`twitterapi.io ${res.status}: ${body.slice(0, 300)}`);
+  const release = await throttle();
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-API-Key': config.twitterApiKey },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`twitterapi.io ${res.status}: ${body.slice(0, 300)}`);
+    }
+    return res.json();
+  } finally {
+    release();
   }
-  return res.json();
+}
+
+// Fetch a watched account's recent tweets, so the rewriter can understand
+// follow-ups and the ongoing story around a new post. Cached per account for a
+// few minutes to avoid hammering the API (and the QPS limit) when an account
+// posts several times in a row.
+const historyCache = new Map(); // handle -> { at, tweets }
+const HISTORY_TTL_MS = 5 * 60 * 1000;
+
+export async function fetchUserRecentTweets(handle, limit = 8) {
+  const key = handle.toLowerCase();
+  const cached = historyCache.get(key);
+  if (cached && Date.now() - cached.at < HISTORY_TTL_MS) return cached.tweets;
+
+  const data = await twitterApiGet('/twitter/user/last_tweets', {
+    userName: handle,
+  });
+  const raw = data.tweets || data.data?.tweets || [];
+  const tweets = raw
+    .slice(0, limit)
+    .map((t) => ({ id: String(t.id), text: t.text || '' }))
+    .filter((t) => t.text);
+  historyCache.set(key, { at: Date.now(), tweets });
+  return tweets;
 }
 
 // Fetch tweets from the watched accounts posted at or after `sinceUnix`
@@ -96,7 +139,6 @@ export async function fetchNewTweets(sinceUnix) {
   // couple of times in case several accounts posted at once. Space out pages
   // to respect the free-tier 1-request-per-5-seconds limit.
   for (let page = 0; page < 3; page++) {
-    if (page > 0) await sleep(PAGE_DELAY_MS);
     const data = await twitterApiGet('/twitter/tweet/advanced_search', {
       query,
       queryType: 'Latest',

@@ -84,18 +84,28 @@ function buildContent(textBlock, imageUrl) {
   ];
 }
 
-function contextLines(tweet) {
+function contextLines(tweet, recentPosts) {
   let s = `Source account: @${tweet.author}\nHas media: ${tweet.media ? 'yes (image attached below — read it)' : 'no'}`;
   if (tweet.quoted) {
     s += `\nThis tweet QUOTES @${tweet.quoted.author}: """${tweet.quoted.text}"""`;
   }
+  // Recent posts from the same account give the rewriter the ongoing thread:
+  // whether this is a follow-up, what "he", "this", "the situation" refer to.
+  const others = (recentPosts || []).filter((p) => p.id !== tweet.id).slice(0, 6);
+  if (others.length) {
+    const list = others.map((p) => `- ${p.text.replace(/\s+/g, ' ').slice(0, 200)}`).join('\n');
+    s +=
+      `\n\nRecent posts from @${tweet.author} (newest first, for context on the ongoing story — ` +
+      `do NOT rewrite these, only use them to understand the new tweet):\n${list}`;
+  }
   return s;
 }
 
-// Rewrite a source tweet into our news voice. Returns
+// Rewrite a source tweet into our news voice. `recentPosts` is that account's
+// recent tweets (from fetchUserRecentTweets), used only as context. Returns
 // { skip, skip_reason, type, prefix, body, insider, summary }.
-export async function rewriteNews(tweet) {
-  const text = `${contextLines(tweet)}\n\nSource tweet:\n"""${tweet.text}"""`;
+export async function rewriteNews(tweet, recentPosts = []) {
+  const text = `${contextLines(tweet, recentPosts)}\n\nNEW tweet to rewrite:\n"""${tweet.text}"""`;
   return structured({
     system: NEWS_SYSTEM,
     user: buildContent(text, tweet.media?.imageUrl),

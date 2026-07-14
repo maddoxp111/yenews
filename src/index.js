@@ -1,5 +1,5 @@
 import { config, YE_HANDLE } from './config.js';
-import { fetchNewTweets } from './poller.js';
+import { fetchNewTweets, fetchUserRecentTweets } from './poller.js';
 import { hasSeenTweet, markSeen, recordStory, getState, setState } from './db.js';
 import { isDuplicateStory } from './dedupe.js';
 import { rewriteNews, commentOnYe } from './rewrite.js';
@@ -55,7 +55,14 @@ async function handleTweet(tweet) {
     return;
   }
 
-  const rewritten = await rewriteNews(tweet);
+  // Pull the source account's recent posts for context on the ongoing story
+  // (follow-ups, what "he"/"this" refers to). Non-fatal if it fails.
+  const recentPosts = await fetchUserRecentTweets(tweet.author).catch((err) => {
+    log('Could not fetch recent posts for @' + tweet.author, '-', err.message);
+    return [];
+  });
+
+  const rewritten = await rewriteNews(tweet, recentPosts);
 
   // Skip posts the model couldn't make sense of, even with the image + quoted
   // tweet — better to stay quiet than post something vague.
